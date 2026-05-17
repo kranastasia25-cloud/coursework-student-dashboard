@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дашборд успеваемости студентов - Технология программирования</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 { color: #333; font-size: 28px; margin-bottom: 8px; }
+        .header p { color: #666; font-size: 14px; }
+        
+        .control-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .refresh-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .auto-badge {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .last-updated { color: #666; font-size: 12px; }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .chart-card h3 {
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+            font-size: 16px;
+        }
+        .chart-container { position: relative; height: 300px; }
+        canvas { max-height: 280px; width: 100%; }
+        .table-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { background: #667eea; color: white; position: sticky; top: 0; }
+        tr:hover { background: #f8f9ff; }
+        .export-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            float: right;
+        }
+        .info-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .info-card {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            min-width: 140px;
+        }
+        .info-card .number { font-size: 28px; font-weight: bold; }
+        .info-card .label { font-size: 12px; opacity: 0.9; }
+        .hidden { display: none; }
+        
+        .filter-section { margin-bottom: 20px; }
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .filter-btn {
+            padding: 8px 20px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .filter-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .negative-rating { color: #e74c3c; font-weight: bold; }
+        .positive-rating { color: #27ae60; font-weight: bold; }
+        .rating-1 { background: #ffd700; color: #333; font-weight: bold; display: inline-block; padding: 2px 8px; border-radius: 20px; }
+        .loading { text-align: center; padding: 40px; color: white; font-size: 18px; }
+        footer { text-align: center; color: rgba(255,255,255,0.7); margin-top: 24px; font-size: 12px; }
+        .clearfix::after { content: ""; clear: both; display: table; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📊 Дашборд успеваемости студентов</h1>
+        <p>Дисциплина: Технология программирования | Автоматическая загрузка из Google Sheets (Apps Script)</p>
+    </div>
+
+    <div class="control-panel">
+        <div class="auto-badge">🔄 Автообновление из Google Sheets</div>
+        <div class="last-updated" id="lastUpdated">Загрузка данных...</div>
+        <button class="refresh-btn" id="refreshBtn">🔄 Обновить</button>
+    </div>
+
+    <div id="dashboardContent" class="hidden">
+        <div class="info-panel" id="infoPanel"></div>
+
+        <div class="filter-section">
+            <div class="filter-group" id="teacherFilter">
+                <button class="filter-btn active" data-teacher="all">📚 Все преподаватели</button>
+                <button class="filter-btn" data-teacher="Юрча">👩‍🏫 Юрча И.А.</button>
+                <button class="filter-btn" data-teacher="Шаститко">👨‍🏫 Шаститко Д.В.</button>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-group" id="subgroupFilter">
+                <button class="filter-btn active" data-subgroup="all">📊 Все подгруппы</button>
+                <button class="filter-btn" data-subgroup="УИР-1">👥 УИР-1</button>
+                <button class="filter-btn" data-subgroup="УИР-2">👥 УИР-2</button>
+            </div>
+        </div>
+
+        <div class="clearfix">
+            <button class="export-btn" id="exportCSVBtn">📎 Экспорт в CSV</button>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>🏆 Рейтинг студентов (чем выше, тем лучше)</h3>
+                <div class="chart-container">
+                    <canvas id="ratingChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3>⚠️ Рекордсмены по пропускам («н»)</h3>
+                <div class="chart-container">
+                    <canvas id="absencesChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3>📊 Распределение рекомендаций</h3>
+                <div class="chart-container">
+                    <canvas id="recommendationChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3>📈 Сравнение преподавателей (средний рейтинг)</h3>
+                <div class="chart-container">
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <h3>📋 Детальная ведомость студентов</h3>
+            <div style="overflow-x: auto; max-height: 400px;">
+                <table id="studentsTable">
+                    <thead>
+                        <tr><th>№</th><th>Студент</th><th>Преподаватель</th><th>Подгруппа</th><th>Рейтинг</th><th>Место</th><th>Рекомендация</th><th>Пропуски</th>
+                    </thead>
+                    <tbody id="studentsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div id="loadingMessage" class="loading">⏳ Загрузка данных из Google Sheets...</div>
+    <footer>Курсовая работа: Разработка веб-дашбордов для визуализации успеваемости студентов</footer>
+</div>
+
+<script>
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7sVCwvVWtgLI-UEgHGuoTefHRaRwZwLZcDtI2YozGnpxo7FxT1-9QkTKqlY746yLZsw/exec';
+    
+    class GoogleSheetsLoader {
+        async loadFromAppsScript() {
+            const response = await fetch(SCRIPT_URL);
+            if (!response.ok) throw new Error(`Ошибка загрузки: ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Ошибка получения данных');
+            return data;
+        }
+    }
+
+    class DataProcessor {
+        constructor() { this.allStudents = []; }
+
+        process(data) {
+            this.allStudents = [];
+            for (const sheet of data.sheets) {
+                const rows = sheet.rows;
+                const teacher = sheet.teacher;
+                let currentSubgroup = 'УИР-1';
+                
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || row.length < 2) continue;
+                    
+                    const firstCell = row[0];
+                    const secondCell = row[1];
+                    
+                    if (secondCell && typeof secondCell === 'string' && secondCell.includes('УИР-2')) {
+                        currentSubgroup = 'УИР-2';
+                        continue;
+                    }
+                    
+                    if (!secondCell || typeof secondCell !== 'string') continue;
+                    if (secondCell.includes('УИР') || secondCell.includes('АиП') || 
+                        secondCell === '№' || secondCell === 'Студент' || secondCell.length < 2) continue;
+                    
+                    const isStudentRow = !isNaN(parseFloat(firstCell)) && firstCell !== '' && firstCell !== null;
+                    if (!isStudentRow) continue;
+                    
+                    const name = secondCell.trim();
+                    if (name.length < 3) continue;
+                    
+                    let rating = 0;
+                    if (row.length > 47) {
+                        const cell = row[47];
+                        if (typeof cell === 'number') rating = cell;
+                        else if (typeof cell === 'string') rating = parseFloat(cell) || 0;
+                    }
+                    
+                    let place = null;
+                    if (row.length > 48) {
+                        const cell = row[48];
+                        if (typeof cell === 'number') place = cell;
+                        else if (typeof cell === 'string') place = parseFloat(cell);
+                    }
+                    
+                    let recommendation = '';
+                    if (row.length > 49) {
+                        const cell = row[49];
+                        if (cell && typeof cell === 'string') recommendation = cell;
+                        else if (typeof cell === 'number') recommendation = cell.toString();
+                    }
+                    
+                    let absences = 0;
+                    for (let col = 2; col < Math.min(row.length, 47); col++) {
+                        const cell = row[col];
+                        if (cell === 'н' || cell === 'н.' || cell === 'Н') {
+                            absences++;
+                        }
+                    }
+                    
+                    if (name && rating !== 0) {
+                        this.allStudents.push({
+                            name, teacher, subgroup: currentSubgroup,
+                            rating, place, recommendation, absences
+                        });
+                    }
+                }
+            }
+            this.allStudents.sort((a, b) => b.rating - a.rating);
+            this.allStudents.forEach((s, idx) => { if (!s.place || s.place === 0) s.place = idx + 1; });
+            return this.allStudents;
+        }
+
+        getFilteredStudents(teacherFilter, subgroupFilter) {
+            let filtered = [...this.allStudents];
+            if (teacherFilter && teacherFilter !== 'all') filtered = filtered.filter(s => s.teacher === teacherFilter);
+            if (subgroupFilter && subgroupFilter !== 'all') filtered = filtered.filter(s => s.subgroup === subgroupFilter);
+            return filtered;
+        }
+
+        getAllStudents() { return this.allStudents; }
+
+        getTeacherComparison() {
+            const teachers = {};
+            this.allStudents.forEach(s => {
+                if (!teachers[s.teacher]) teachers[s.teacher] = { total: 0, count: 0 };
+                teachers[s.teacher].total += s.rating;
+                teachers[s.teacher].count++;
+            });
+            return Object.entries(teachers).map(([name, data]) => ({
+                name, avgRating: (data.total / data.count).toFixed(1), count: data.count
+            }));
+        }
+
+        getRecommendationStats(students) {
+            const stats = { '10 (Авт.)': 0, '9 (Авт.)': 0, '8': 0, 'по рез. экз.': 0 };
+            students.forEach(s => {
+                let rec = s.recommendation || '';
+                if (rec.includes('10')) stats['10 (Авт.)']++;
+                else if (rec.includes('9')) stats['9 (Авт.)']++;
+                else if (rec.includes('8')) stats['8']++;
+                else if (rec.includes('экз')) stats['по рез. экз.']++;
+                else if (s.rating >= 80) stats['10 (Авт.)']++;
+                else if (s.rating >= 60) stats['9 (Авт.)']++;
+                else if (s.rating >= 40) stats['8']++;
+                else stats['по рез. экз.']++;
+            });
+            return stats;
+        }
+    }
+
+    class DashboardRenderer {
+        constructor() { this.charts = {}; }
+        destroyAll() { Object.values(this.charts).forEach(chart => chart?.destroy()); this.charts = {}; }
+
+        renderRatingChart(students, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const top15 = students.slice(0, 15);
+            const colors = top15.map(r => r.rating < 0 ? 'rgba(231,76,60,0.8)' : 'rgba(102,126,234,0.7)');
+            this.charts.rating = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: top15.map(s => s.name.split(' ')[0]), datasets: [{ label: 'Рейтинг', data: top15.map(s => s.rating), backgroundColor: colors, borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        renderAbsencesChart(students, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const top = [...students].sort((a,b) => b.absences - a.absences).slice(0,12);
+            const colors = top.map(a => a.absences >= 5 ? 'rgba(231,76,60,0.8)' : 'rgba(243,156,18,0.8)');
+            this.charts.absences = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: top.map(s => s.name.split(' ')[0]), datasets: [{ label: 'Пропуски', data: top.map(s => s.absences), backgroundColor: colors, borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        renderRecommendationChart(students, processor, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const stats = processor.getRecommendationStats(students);
+            this.charts.recommendation = new Chart(ctx, {
+                type: 'pie',
+                data: { labels: Object.keys(stats), datasets: [{ data: Object.values(stats), backgroundColor: ['#27ae60','#2ecc71','#f39c12','#e74c3c'] }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'right' } } }
+            });
+        }
+
+        renderComparisonChart(processor, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const comp = processor.getTeacherComparison();
+            this.charts.comparison = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: comp.map(c => c.name), datasets: [{ label: 'Средний рейтинг', data: comp.map(c => c.avgRating), backgroundColor: 'rgba(102,126,234,0.7)', borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+    }
+
+    class ReportExporter {
+        static exportToCSV(students) {
+            if (!students.length) return;
+            const headers = ['№','Студент','Преподаватель','Подгруппа','Рейтинг','Место','Рекомендация','Пропуски'];
+            const rows = students.map((s,i) => [i+1, s.name, s.teacher, s.subgroup, s.rating, s.place, s.recommendation, s.absences]);
+            const csv = [headers, ...rows].map(row => row.join(';')).join('\n');
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = 'успеваемость_студентов.csv';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    class StudentDashboardApp {
+        constructor() {
+            this.loader = new GoogleSheetsLoader();
+            this.processor = new DataProcessor();
+            this.renderer = new DashboardRenderer();
+            this.currentTeacher = 'all';
+            this.currentSubgroup = 'all';
+            this.init();
+        }
+
+        init() {
+            document.getElementById('refreshBtn').onclick = () => this.loadData();
+            document.getElementById('exportCSVBtn').onclick = () => {
+                const filtered = this.processor.getFilteredStudents(this.currentTeacher, this.currentSubgroup);
+                ReportExporter.exportToCSV(filtered);
+            };
+            document.querySelectorAll('#teacherFilter .filter-btn').forEach(btn => {
+                btn.onclick = () => {
+                    document.querySelectorAll('#teacherFilter .filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.currentTeacher = btn.dataset.teacher;
+                    this.updateDashboard();
+                };
+            });
+            document.querySelectorAll('#subgroupFilter .filter-btn').forEach(btn => {
+                btn.onclick = () => {
+                    document.querySelectorAll('#subgroupFilter .filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.currentSubgroup = btn.dataset.subgroup;
+                    this.updateDashboard();
+                };
+            });
+            this.loadData();
+        }
+
+        async loadData() {
+            const loading = document.getElementById('loadingMessage');
+            const dashboard = document.getElementById('dashboardContent');
+            loading.style.display = 'block';
+            dashboard.classList.add('hidden');
+            try {
+                const data = await this.loader.loadFromAppsScript();
+                this.processor.process(data);
+                if (this.processor.getAllStudents().length === 0) throw new Error('Студенты не найдены');
+                document.getElementById('lastUpdated').innerHTML = `📅 Обновлено: ${new Date().toLocaleString('ru-RU')}`;
+                dashboard.classList.remove('hidden');
+                this.updateDashboard();
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        updateDashboard() {
+            const filtered = this.processor.getFilteredStudents(this.currentTeacher, this.currentSubgroup);
+            
+            // Инфо-панель
+            const avg = filtered.reduce((sum, s) => sum + s.rating, 0) / filtered.length || 0;
+            const totalAbs = filtered.reduce((sum, s) => sum + s.absences, 0);
+            const maxAbs = Math.max(...filtered.map(s => s.absences), 0);
+            document.getElementById('infoPanel').innerHTML = `
+                <div class="info-card"><div class="number">${filtered.length}</div><div class="label">Студентов</div></div>
+                <div class="info-card"><div class="number">${avg.toFixed(1)}</div><div class="label">Ср. рейтинг</div></div>
+                <div class="info-card"><div class="number">${totalAbs}</div><div class="label">Всего пропусков</div></div>
+                <div class="info-card"><div class="number">${maxAbs}</div><div class="label">Макс. пропусков</div></div>
+            `;
+
+            // Таблица
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+            filtered.forEach((s, idx) => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = idx + 1;
+                row.insertCell(1).textContent = s.name;
+                row.insertCell(2).innerHTML = `<span class="badge" style="background:#667eea;color:white;">${s.teacher}</span>`;
+                row.insertCell(3).innerHTML = `<span class="badge" style="background:#764ba2;color:white;">${s.subgroup}</span>`;
+                row.insertCell(4).innerHTML = s.rating < 0 ? `<span class="negative-rating">${s.rating}</span>` : `<span class="positive-rating">${s.rating}</span>`;
+                row.insertCell(5).innerHTML = s.place === 1 ? `<span class="rating-1">🥇 ${s.place}</span>` : s.place;
+                row.insertCell(6).innerHTML = s.recommendation || '—';
+                const absencesValue = typeof s.absences === 'number' ? s.absences : (parseInt(s.absences) || 0);
+                row.insertCell(7).innerHTML = absencesValue > 5 ? `<span class="badge" style="background:#e74c3c;color:white;">${absencesValue}</span>` : absencesValue;
+            });
+
+            // Графики
+            this.renderer.destroyAll();
+            this.renderer.renderRatingChart(filtered, 'ratingChart');
+            this.renderer.renderAbsencesChart(filtered, 'absencesChart');
+            this.renderer.renderRecommendationChart(filtered, this.processor, 'recommendationChart');
+            this.renderer.renderComparisonChart(this.processor, 'comparisonChart');
+        }
+    }
+
+    new StudentDashboardApp();
+</script>
+</body>
+</html>
